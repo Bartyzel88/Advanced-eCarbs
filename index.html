@@ -437,8 +437,11 @@ const resultArray = j => Array.isArray(j) ? j : (j && Array.isArray(j.result) ? 
 async function refreshStatus() {
   if (!configured()) { renderStatus(); return; }
   try {
-    const j = await ns("/api/v3/entries", { query: { "sort$desc": "date", limit: 4, fields: "date,sgv,direction" } });
-    const arr = resultArray(j).filter(e => Number(e.sgv) > 0).sort((a, b) => b.date - a.date);
+    // date$gte with a number also skips very old documents whose date is stored as text or as
+    // a Mongo date; those would otherwise sort ahead of today's readings.
+    const j = await ns("/api/v3/entries", { query: { "date$gte": Date.now() - 60 * 60000, "sort$desc": "date", limit: 6, fields: "date,sgv,direction" } });
+    const arr = resultArray(j).map(e => Object.assign({}, e, { date: Number(e.date) }))
+      .filter(e => Number(e.sgv) > 0 && Number.isFinite(e.date) && e.date <= Date.now() + 5 * 60000).sort((a, b) => b.date - a.date);
     if (arr.length) {
       const e0 = arr[0], e1 = arr[1];
       let d5 = null;
@@ -447,7 +450,7 @@ async function refreshStatus() {
     } else BG = null;
   } catch (e) { BG = { error: e.message }; }
   try {
-    const j = await ns("/api/v3/devicestatus", { query: { "sort$desc": "date", limit: 1 } });
+    const j = await ns("/api/v3/devicestatus", { query: { "date$gte": Date.now() - 30 * 60000, "sort$desc": "date", limit: 1 } });
     const d = resultArray(j)[0];
     const sug = d && d.openaps && (d.openaps.suggested || d.openaps.enacted);
     const iob = d && d.openaps && d.openaps.iob;
@@ -462,13 +465,16 @@ async function refreshStatus() {
 function renderStatus() {
   const el = $("status");
   if (!configured()) { el.innerHTML = '<span class="quiet">Połącz z Nightscoutem w ustawieniach na dole.</span>'; return; }
-  if (!BG) { el.innerHTML = '<span class="quiet">Brak odczytów glukozy w Nightscoucie.</span>'; return; }
+  if (!BG) { el.innerHTML = '<span class="quiet">Brak odczytów glukozy z ostatniej godziny w Nightscoucie.</span>'; return; }
   if (BG.error) { el.innerHTML = `<span class="quiet">${esc(BG.error)}</span>`; return; }
   const arrows = { DoubleUp: "⇈", SingleUp: "↑", FortyFiveUp: "↗", Flat: "→", FortyFiveDown: "↘", SingleDown: "↓", DoubleDown: "⇊" };
   const age = Math.round((Date.now() - BG.date) / 60000);
-  const low = BG.sgv < S.minBg;
+  const stale = age > S.staleMin;
+  const low = BG.sgv < S.minBg && !stale;
   const d = BG.d5 == null ? "" : (BG.d5 >= 0 ? "+" : "−") + bgText(Math.abs(BG.d5));
-  let h = `<span class="bg${low ? " low" : ""}">${bgText(BG.sgv)} ${arrows[BG.dir] || ""}</span><span>${bgUnit()} ${d}</span>`;
+  let h = stale
+    ? `<span class="bg" style="color:var(--muted)">${bgText(BG.sgv)}</span><span>${bgUnit()}, odczyt nieaktualny</span>`
+    : `<span class="bg${low ? " low" : ""}">${bgText(BG.sgv)} ${arrows[BG.dir] || ""}</span><span>${bgUnit()} ${d}</span>`;
   if (LOOP && LOOP.cob != null) h += `<span>COB <b>${fmt(LOOP.cob)} g</b></span>`;
   if (LOOP && LOOP.iob != null) h += `<span>IOB <b>${fmt(LOOP.iob)} j.</b></span>`;
   h += `<span>${age <= 0 ? "przed chwilą" : age + " min temu"}</span>`;
