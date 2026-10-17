@@ -401,6 +401,15 @@ let JWT = null;
 const NO_REPLY = "Brak odpowiedzi z Nightscouta. Sprawdź adres (razem z portem, jeśli go masz) i czy Nightscout ma włączone cors dla tej strony.";
 const BAD_TOKEN = "Nightscout nie rozpoznał tokenu (401). Wklej sam token z kolumny z tokenem w /admin, np. planer-1a2b3c4d5e6f7a8b, bez nazwy podmiotu i bez całego linku.";
 const baseUrl = () => S.nsUrl.trim().replace(/\/+$/, "");
+// Shiro-style match: "*" and missing trailing parts are wildcards, "a,b" lists alternatives.
+function permits(pattern, need) {
+  const p = String(pattern).trim().split(":"), n = need.split(":");
+  for (let i = 0; i < n.length; i++) {
+    if (i >= p.length) return true;
+    if (p[i] !== "*" && !p[i].split(",").map(x => x.trim()).includes(n[i])) return false;
+  }
+  return true;
+}
 async function getJwt(force = false) {
   if (!force && JWT && JWT.key === baseUrl() + "|" + S.token && JWT.exp - 120000 > Date.now()) return JWT.token;
   let r;
@@ -408,7 +417,8 @@ async function getJwt(force = false) {
   catch (e) { throw new NSError(0, NO_REPLY); }
   let j = null; try { j = await r.json(); } catch (e) { /* not json */ }
   if (!r.ok || !j || !j.token) throw new NSError(r.status === 404 ? 404 : 401, r.status === 404 ? "Ten Nightscout nie ma API v2/v3. Potrzebna wersja 15 lub nowsza." : BAD_TOKEN);
-  JWT = { token: j.token, exp: j.exp ? j.exp * 1000 : Date.now() + 3600e3, key: baseUrl() + "|" + S.token };
+  JWT = { token: j.token, exp: j.exp ? j.exp * 1000 : Date.now() + 3600e3, key: baseUrl() + "|" + S.token,
+          groups: Array.isArray(j.permissionGroups) ? j.permissionGroups : null };
   return JWT.token;
 }
 async function ns(path, { method = "GET", body = null, query = {} } = {}, retried = false) {
@@ -751,16 +761,16 @@ function bindSettings() {
     out.textContent = "Sprawdzam…";
     JWT = null;                                   // pick up role changes immediately
     try {
-      const st = await ns("/api/v3/status");
-      const r = (st && st.result) || st || {};
-      const ap = r.apiPermissions || {};
-      const NEED = [["treatments", "r", "api:treatments:read"], ["treatments", "c", "api:treatments:create"],
-                    ["treatments", "u", "api:treatments:update"], ["treatments", "d", "api:treatments:delete"],
-                    ["entries", "r", "api:entries:read"], ["devicestatus", "r", "api:devicestatus:read"]];
-      const missing = NEED.filter(([col, x]) => !(ap[col] || "").includes(x)).map(n => n[2]);
-      out.textContent = `Nightscout ${r.version || "?"}, API v3 ${r.apiVersion || "?"}. ` +
-        `Wpisy: ${ap.treatments || "brak"}, glukoza: ${ap.entries || "brak"}, status pętli: ${ap.devicestatus || "brak"}. ` +
-        (missing.length ? `Dopisz do roli: ${missing.join(", ")}.` : "Wszystko gotowe.");
+      await getJwt();
+      let ver = "";
+      try { const v = await ns("/api/v3/version"); const r = (v && v.result) || v || {}; ver = `Nightscout ${r.version || "?"}, API v3 ${r.apiVersion || "?"}. `; } catch (e) { /* version is optional */ }
+      // /api/v3/status reports wrong permissions for non-admin roles (it checks "api:undefined:…"),
+      // so use the permission groups Nightscout returns together with the JWT instead.
+      const granted = (JWT.groups || []).flat().map(String);
+      const NEED = ["api:treatments:read", "api:treatments:create", "api:treatments:update", "api:treatments:delete", "api:entries:read", "api:devicestatus:read"];
+      if (!granted.length) { out.textContent = ver + "Token działa. Nightscout nie podał listy uprawnień, użyj „Test zapisu”."; refreshStatus(); return; }
+      const missing = NEED.filter(n => !granted.some(g => permits(g, n)));
+      out.textContent = ver + (missing.length ? `Dopisz do roli: ${missing.join(", ")}.` : "Token ma wszystkie potrzebne uprawnienia.");
       refreshStatus();
     } catch (e) { out.textContent = e.message; }
   });
