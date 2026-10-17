@@ -210,7 +210,7 @@ footer { color: var(--muted); font-size: 0.85rem; margin: 0.5rem 0 1rem; }
       <div class="form" id="form">
         <label>Adres Nightscouta<input class="field-text" id="s-nsUrl" type="url" inputmode="url" placeholder="https://twoj-nightscout.example" autocomplete="off"></label>
         <label>Token dostępu<input class="field-text" id="s-token" type="password" autocomplete="off" placeholder="np. planer-1a2b3c4d5e6f7a8b"></label>
-        <div class="btnrow"><button class="btn" id="test">Sprawdź połączenie</button></div>
+        <div class="btnrow"><button class="btn" id="test">Sprawdź połączenie</button><button class="btn" id="probe">Test zapisu</button></div>
         <p class="quiet" id="test-out" aria-live="polite"></p>
 
         <h3>Bezpieczeństwo</h3>
@@ -487,7 +487,7 @@ async function loadActive() {
   try {
     const since = Date.now() - 9 * 3600e3;
     const j = await ns("/api/v3/treatments", { query: { "app$eq": APP, "date$gte": since, limit: 500, sort: "date" } });
-    const docs = resultArray(j).filter(d => d.isValid !== false && d.fpuPlanId);
+    const docs = resultArray(j).filter(d => d.isValid !== false && d.fpuPlanId && !String(d.fpuPlanId).startsWith("fpu-test-"));
     const groups = new Map();
     for (const d of docs) { if (!groups.has(d.fpuPlanId)) groups.set(d.fpuPlanId, []); groups.get(d.fpuPlanId).push(d); }
     const now = Date.now();
@@ -723,6 +723,28 @@ function bindSettings() {
     });
   }
   $("reset").addEventListener("click", () => { S.planner = Object.assign({}, PLANNER_DEFAULTS); saveSettings(); fill(); render(); toast("Przywrócono domyślne ustawienia planera."); });
+  // Real write/delete check with a harmless note (no carbs), removed right away.
+  $("probe").addEventListener("click", async () => {
+    const out = $("test-out");
+    if (!configured()) { out.textContent = "Wpisz adres i token."; return; }
+    if (busy) return;
+    busy = true; JWT = null;
+    const id = "fpu-test-" + Date.now();
+    out.textContent = "Zapisuję testową notatkę…";
+    try {
+      try {
+        await ns("/api/v3/treatments", { method: "POST", body: { app: APP, device: APP, enteredBy: "Planer eCarbs", eventType: "Note",
+          date: Date.now(), utcOffset: -new Date().getTimezoneOffset(), fpuPlanId: id, notes: "Test zapisu planera eCarbs, usuwany automatycznie" } });
+      } catch (e) { out.textContent = "Zapis nie działa. " + e.message; return; }
+      let docs = [];
+      try { docs = resultArray(await ns("/api/v3/treatments", { query: { "app$eq": APP, "fpuPlanId$eq": id, limit: 5 } })).filter(d => d.identifier && d.isValid !== false); }
+      catch (e) { out.textContent = "Zapis działa, ale odczyt nie. " + e.message + " Usuń testową notatkę ręcznie w Nightscoucie."; return; }
+      if (!docs.length) { out.textContent = "Zapis działa, ale nie znalazłem notatki do usunięcia. Usuń ją ręcznie w Nightscoucie."; return; }
+      try { for (const d of docs) await ns(`/api/v3/treatments/${encodeURIComponent(d.identifier)}`, { method: "DELETE" }); }
+      catch (e) { out.textContent = "Notatka zapisana, ale usuwanie nie działa. " + e.message + " Usuń ją ręcznie."; return; }
+      out.textContent = "Zapis, odczyt i usuwanie działają. Testowa notatka została już usunięta.";
+    } finally { busy = false; render(); }
+  });
   $("test").addEventListener("click", async () => {
     const out = $("test-out");
     if (!configured()) { out.textContent = "Wpisz adres i token."; return; }
