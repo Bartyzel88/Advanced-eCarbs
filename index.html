@@ -1,0 +1,779 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#E8ECEF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0F151B" media="(prefers-color-scheme: dark)">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Planer eCarbs</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232D4B66'/%3E%3Crect x='10' y='38' width='8' height='14' fill='%23EFB234'/%3E%3Crect x='22' y='30' width='8' height='22' fill='%23fff'/%3E%3Crect x='34' y='20' width='8' height='32' fill='%23fff'/%3E%3Crect x='46' y='32' width='8' height='20' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow+Semi+Condensed:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #E8ECEF; --surface: #FFFFFF; --ink: #16202A; --muted: #586874; --line: #CBD3D9;
+  --honey: #C98A00; --honey-ink: #7E5600; --olive: #5F7D22; --brick: #A94335; --slate: #2D4B66;
+  --danger: #B3261E; --danger-bg: #FBE9E7; --warn-bg: #FFF4D6; --ok: #2F6B3A;
+  --cell: #DCE2E7;
+  --font: "Barlow Semi Condensed", "Roboto Condensed", "Arial Narrow", system-ui, sans-serif;
+  --num: "Barlow Condensed", "Roboto Condensed", "Arial Narrow", system-ui, sans-serif;
+  color-scheme: light;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0F151B; --surface: #18212A; --ink: #E5ECF1; --muted: #92A3B0; --line: #2B3843;
+    --honey: #EFB234; --honey-ink: #F5C86A; --olive: #9DBB5A; --brick: #E2786A; --slate: #86ABCB;
+    --danger: #F2867A; --danger-bg: #3A1D1A; --warn-bg: #3A3014; --ok: #8BC79A; --cell: #222E38;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0F151B; --surface: #18212A; --ink: #E5ECF1; --muted: #92A3B0; --line: #2B3843;
+  --honey: #EFB234; --honey-ink: #F5C86A; --olive: #9DBB5A; --brick: #E2786A; --slate: #86ABCB;
+  --danger: #F2867A; --danger-bg: #3A1D1A; --warn-bg: #3A3014; --ok: #8BC79A; --cell: #222E38;
+  color-scheme: dark;
+}
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 17px/1.45 var(--font); -webkit-text-size-adjust: 100%;
+}
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+main { max-width: 34rem; margin: 0 auto; padding: 0.75rem 1rem 1rem; }
+h1, h2 { font-family: var(--num); font-weight: 600; letter-spacing: 0.01em; margin: 0; }
+h1 { font-size: 1.5rem; }
+h2 { font-size: 1.25rem; margin-bottom: 0.5rem; }
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--honey); outline-offset: 2px; }
+.num { font-family: var(--num); font-variant-numeric: tabular-nums; }
+
+/* header + status */
+.top { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.icon-btn { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; min-width: 44px; height: 44px; padding: 0 0.8rem; cursor: pointer; }
+.status { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 1.1rem; margin: 0.5rem 0 1rem; color: var(--muted); font-size: 0.95rem; }
+.status .bg { font-family: var(--num); font-size: 2rem; font-weight: 600; color: var(--ink); line-height: 1; }
+.status .bg.low { color: var(--danger); }
+.status b { font-family: var(--num); font-weight: 600; color: var(--ink); font-size: 1.15rem; }
+
+/* panels */
+.panel { background: var(--surface); border-radius: 18px; padding: 1rem; margin-bottom: 1rem; }
+.field-text { width: 100%; border: 1px solid var(--line); background: transparent; border-radius: 10px; padding: 0.6rem 0.75rem; min-height: 44px; }
+.chips { display: flex; gap: 0.5rem; overflow-x: auto; padding: 0.6rem 0 0.2rem; scrollbar-width: none; }
+.chip { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 999px; white-space: nowrap; }
+.chip button { border: 0; background: none; padding: 0.45rem 0.5rem 0.45rem 0.85rem; min-height: 40px; cursor: pointer; }
+.chip button.x { padding: 0.45rem 0.7rem 0.45rem 0.3rem; color: var(--muted); }
+.chip.save button { padding: 0.45rem 0.85rem; color: var(--slate); font-weight: 600; }
+
+.macro { display: grid; grid-template-columns: 6px minmax(0, 1fr) auto; align-items: center; gap: 0.6rem; padding: 0.55rem 0; border-bottom: 1px solid var(--line); }
+.macro:last-of-type { border-bottom: 0; }
+.macro .bar { align-self: stretch; border-radius: 3px; }
+.macro label { font-weight: 500; }
+.macro small { display: block; color: var(--muted); font-size: 0.85rem; font-weight: 400; }
+.stepper { display: flex; align-items: center; gap: 0.25rem; }
+.stepper button { width: 42px; height: 44px; border-radius: 12px; border: 1px solid var(--line); background: transparent; font-size: 1.4rem; line-height: 1; cursor: pointer; }
+.stepper input { width: 4.2ch; text-align: right; border: 0; background: transparent; font-family: var(--num); font-size: 1.9rem; font-weight: 600; padding: 0; }
+.stepper .unit { color: var(--muted); width: 1ch; }
+@media (max-width: 380px) {
+  .macro label { font-size: 0.92rem; }
+  .stepper button { width: 38px; }
+  .stepper input { font-size: 1.65rem; width: 3.8ch; }
+}
+.timerow { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-top: 0.8rem; flex-wrap: wrap; }
+.timerow .seg { display: flex; gap: 0.35rem; }
+.timerow .seg button { min-width: 48px; height: 40px; border-radius: 10px; border: 1px solid var(--line); background: transparent; cursor: pointer; }
+
+/* plan */
+.headline { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; }
+.headline .label { color: var(--muted); }
+.headline .big { font-family: var(--num); font-size: 3.6rem; font-weight: 700; line-height: 0.9; }
+.headline .big span { font-size: 1.6rem; font-weight: 600; margin-left: 0.15rem; }
+.copy { border: 1px solid var(--line); background: transparent; border-radius: 10px; min-height: 44px; padding: 0 0.9rem; cursor: pointer; }
+.seq { margin: 1rem -0.25rem 0.25rem; }
+.seq svg { width: 100%; height: auto; display: block; overflow: visible; }
+.legend { display: flex; flex-wrap: wrap; gap: 0.25rem 1.2rem; font-size: 0.95rem; color: var(--muted); }
+.legend i { display: inline-block; width: 0.8em; height: 0.8em; border-radius: 2px; margin-right: 0.35em; vertical-align: -0.05em; }
+.facts { margin: 0.75rem 0 0; padding: 0; list-style: none; }
+.facts li { padding: 0.35rem 0; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.1rem 1rem; }
+.facts li span:first-child { color: var(--muted); }
+.facts li span:last-child { font-family: var(--num); font-weight: 600; font-size: 1.1rem; white-space: nowrap; }
+.msg { border-radius: 10px; padding: 0.55rem 0.75rem; margin-top: 0.6rem; font-size: 0.95rem; }
+.msg.warn { background: var(--warn-bg); }
+.msg.block { background: var(--danger-bg); color: var(--danger); font-weight: 500; }
+.quiet { color: var(--muted); font-size: 0.95rem; }
+details.json summary { cursor: pointer; color: var(--muted); margin-top: 0.75rem; font-size: 0.9rem; }
+details.json pre { overflow-x: auto; font-size: 0.75rem; background: var(--bg); padding: 0.6rem; border-radius: 8px; max-height: 14rem; }
+
+/* active plans */
+.plan-item { padding: 0.6rem 0; border-top: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; }
+.plan-item:first-of-type { border-top: 0; }
+.danger-btn { border: 1px solid var(--danger); color: var(--danger); background: transparent; border-radius: 10px; min-height: 44px; padding: 0 0.8rem; cursor: pointer; }
+.danger-btn.wide { width: 100%; margin-top: 0.6rem; }
+
+/* settings */
+details.settings > summary { cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+details.settings > summary::-webkit-details-marker { display: none; }
+details.settings > summary::after { content: "+"; font-family: var(--num); font-size: 1.6rem; color: var(--muted); }
+details.settings[open] > summary::after { content: "–"; }
+.form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.75rem; margin-top: 0.75rem; }
+.form label { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.2rem; font-size: 0.95rem; min-width: 0; }
+.form .row2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; align-items: end; }
+.form input, .form select { min-width: 0; max-width: 100%; }
+.form input[type=number], .form select { border: 1px solid var(--line); background: transparent; border-radius: 10px; padding: 0.5rem 0.65rem; min-height: 44px; width: 100%; }
+.form .check { grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 0.6rem; }
+.form .check input { width: 22px; height: 22px; }
+.form h3 { font-family: var(--num); font-weight: 600; font-size: 1.05rem; margin: 0.6rem 0 0; }
+.form p:empty { display: none; }
+.btnrow { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.btn { border: 1px solid var(--line); background: transparent; border-radius: 10px; min-height: 44px; padding: 0 0.9rem; cursor: pointer; }
+.help { font-size: 0.92rem; color: var(--muted); }
+.help ol { padding-left: 1.2rem; margin: 0.4rem 0; }
+.help code { font-size: 0.85em; background: var(--bg); padding: 0.05em 0.3em; border-radius: 4px; overflow-wrap: anywhere; }
+
+/* send bar */
+.sendbar { position: sticky; bottom: 0; padding: 0.6rem 1rem calc(0.6rem + env(safe-area-inset-bottom, 0px)); background: var(--bg); margin: 0 -1rem; }
+.send { width: 100%; min-height: 56px; border: 0; border-radius: 16px; background: var(--slate); color: #fff; font-family: var(--num); font-size: 1.3rem; font-weight: 600; cursor: pointer; }
+:root[data-theme="dark"] .send { color: #0F151B; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .send { color: #0F151B; } }
+.send:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* dialog + toast */
+dialog { border: 0; border-radius: 18px; padding: 1.1rem; width: min(30rem, calc(100vw - 2rem)); background: var(--surface); color: var(--ink); }
+dialog::backdrop { background: rgba(10, 16, 22, 0.55); }
+dialog ul { padding-left: 1.1rem; margin: 0.5rem 0; }
+dialog .btnrow { justify-content: flex-end; margin-top: 1rem; }
+dialog .primary { background: var(--slate); color: #fff; border-color: var(--slate); font-weight: 600; }
+.toast { position: fixed; left: 50%; bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 0.65rem 1rem; border-radius: 12px; max-width: calc(100vw - 2rem); z-index: 20; display: none; }
+.toast.show { display: block; }
+footer { color: var(--muted); font-size: 0.85rem; margin: 0.5rem 0 1rem; }
+@media (prefers-reduced-motion: no-preference) {
+  .seq rect.tick { transition: height 160ms ease, y 160ms ease; }
+}
+</style>
+</head>
+<body>
+<main>
+  <div class="top">
+    <h1>Planer eCarbs</h1>
+    <button class="icon-btn" id="refresh" aria-label="Odśwież dane z Nightscouta">⟳</button>
+  </div>
+  <div class="status" id="status" aria-live="polite"><span class="quiet">Połącz z Nightscoutem w ustawieniach na dole.</span></div>
+
+  <section class="panel" aria-labelledby="meal-h">
+    <h2 id="meal-h">Posiłek</h2>
+    <input class="field-text" id="name" placeholder="Nazwa posiłku (opcjonalnie)" autocomplete="off" aria-label="Nazwa posiłku">
+    <div class="chips" id="chips"></div>
+
+    <div class="macro">
+      <span class="bar" style="background:var(--honey)"></span>
+      <label for="c">Węglowodany<small>jak na etykiecie</small></label>
+      <div class="stepper"><button data-step="c:-1" aria-label="Mniej węglowodanów">−</button><input id="c" inputmode="decimal" value="0" aria-describedby="c-u"><span class="unit" id="c-u">g</span><button data-step="c:1" aria-label="Więcej węglowodanów">+</button></div>
+    </div>
+    <div class="macro">
+      <span class="bar" style="background:var(--olive)"></span>
+      <label for="f">Tłuszcz</label>
+      <div class="stepper"><button data-step="f:-1" aria-label="Mniej tłuszczu">−</button><input id="f" inputmode="decimal" value="0" aria-describedby="f-u"><span class="unit" id="f-u">g</span><button data-step="f:1" aria-label="Więcej tłuszczu">+</button></div>
+    </div>
+    <div class="macro">
+      <span class="bar" style="background:var(--brick)"></span>
+      <label for="p">Białko</label>
+      <div class="stepper"><button data-step="p:-1" aria-label="Mniej białka">−</button><input id="p" inputmode="decimal" value="0" aria-describedby="p-u"><span class="unit" id="p-u">g</span><button data-step="p:1" aria-label="Więcej białka">+</button></div>
+    </div>
+
+    <div class="timerow">
+      <div><span class="quiet">Czas posiłku</span><br><b class="num" id="time-label">teraz</b></div>
+      <div class="seg" role="group" aria-label="Zmień czas posiłku">
+        <button data-time="-15">−15</button><button data-time="-5">−5</button><button data-time="5">+5</button><button data-time="now">teraz</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="plan-h">
+    <h2 id="plan-h">Plan</h2>
+    <div id="plan" aria-live="polite"></div>
+  </section>
+
+  <section class="panel" aria-labelledby="active-h">
+    <h2 id="active-h">Aktywne plany</h2>
+    <div id="active"><p class="quiet">Plany pojawią się tu po połączeniu z Nightscoutem.</p></div>
+  </section>
+
+  <section class="panel">
+    <details class="settings" id="settings">
+      <summary><h2 style="margin:0">Ustawienia</h2></summary>
+      <div class="form" id="form">
+        <label>Adres Nightscouta<input class="field-text" id="s-nsUrl" type="url" inputmode="url" placeholder="https://twoj-nightscout.example" autocomplete="off"></label>
+        <label>Token dostępu<input class="field-text" id="s-token" type="password" autocomplete="off" placeholder="np. planer-1a2b3c4d5e6f7a8b"></label>
+        <div class="btnrow"><button class="btn" id="test">Sprawdź połączenie</button></div>
+        <p class="quiet" id="test-out" aria-live="polite"></p>
+
+        <h3>Bezpieczeństwo</h3>
+        <div class="row2">
+          <label>Blokuj poniżej [mg/dL]<input type="number" id="s-minBg" min="60" max="200" step="1"></label>
+          <label>Spadek blokujący [mg/dL/5 min]<input type="number" id="s-fallRate" min="-30" max="0" step="1"></label>
+        </div>
+        <label class="check"><input type="checkbox" id="s-blockFalling">Blokuj wysyłkę, gdy glukoza szybko spada</label>
+        <label>Jednostki glukozy<select id="s-units"><option value="mgdl">mg/dL</option><option value="mmol">mmol/L</option></select></label>
+
+        <h3>Planer</h3>
+        <div class="row2">
+          <label>Współczynnik FPU<input type="number" id="p-fpuFactor" min="0" max="1.5" step="0.05"></label>
+          <label>Limit ekwiwalentu [g]<input type="number" id="p-maxTotalCE" min="0" max="120" step="1"></label>
+          <label>Próg tłuszczu [g]<input type="number" id="p-fatThreshold" min="0" max="200" step="1"></label>
+          <label>Próg białka [g]<input type="number" id="p-proteinThreshold" min="0" max="200" step="1"></label>
+          <label>Start profilu [min]<input type="number" id="p-proteinOnset" min="0" max="240" step="5"></label>
+          <label>Tłuszcz później o [min]<input type="number" id="p-fatOnsetOffset" min="0" max="180" step="5"></label>
+          <label>Maks. okno [h]<input type="number" id="p-maxWindowH" min="3" max="10" step="1"></label>
+          <label>Limit na wpis [g]<input type="number" id="p-maxEntry" min="1" max="200" step="1"></label>
+        </div>
+        <label class="check"><input type="checkbox" id="p-carbSplit">Przy tłustych posiłkach przesuń część węglowodanów na wolne eCarbs</label>
+        <div class="btnrow"><button class="btn" id="reset">Przywróć domyślne planera</button></div>
+
+        <details class="help">
+          <summary>Co trzeba ustawić w Nightscoucie i AAPS</summary>
+          <ol>
+            <li>W Nightscoucie dopisz <code>cors</code> do zmiennej <code>ENABLE</code> i ustaw <code>CORS_ALLOW_ORIGIN</code> na adres tej strony, np. <code>https://twoj-login.github.io</code>.</li>
+            <li>W Admin Tools utwórz rolę z uprawnieniami <code>api:treatments:read, api:treatments:create, api:treatments:update, api:treatments:delete, api:entries:read, api:devicestatus:read</code>, potem podmiot z tą rolą. Skopiuj jego token.</li>
+            <li>W AAPS, w ustawieniach NSClient, włącz przyjmowanie węglowodanów z Nightscouta.</li>
+            <li>Bolus na węglowodany „teraz” podaj jak zwykle kalkulatorem w AAPS, najlepiej przed wysyłką planu. Planer wysyła wyłącznie eCarbs i notatkę ze składem.</li>
+          </ol>
+          <p>Token zostaje tylko w pamięci tej przeglądarki. Skrót do konkretnego posiłku: zapisz go albo przytrzymaj jego nazwę, a link trafi do schowka. Otwórz ten link w Chrome i wybierz „Dodaj do ekranu głównego”.</p>
+        </details>
+      </div>
+    </details>
+  </section>
+
+  <footer>Narzędzie DIY bez certyfikacji medycznej. Wysłane wpisy pętla potraktuje jak przyszłe węglowodany i będzie na nie podawać insulinę.</footer>
+
+  <div class="sendbar"><button class="send" id="send" disabled>Wyślij do Nightscouta</button></div>
+</main>
+
+<dialog id="confirm" aria-labelledby="confirm-h">
+  <h2 id="confirm-h">Wysłać plan do Nightscouta?</h2>
+  <div id="confirm-body"></div>
+  <div class="btnrow"><button class="btn" value="cancel" id="confirm-no">Anuluj</button><button class="btn primary" id="confirm-yes">Wyślij</button></div>
+</dialog>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+"use strict";
+// ---- planner (identical logic to fpu_prototype.py, cross-checked on 308 meals) ----
+const PLANNER_DEFAULTS = {
+  fpuFactor: 0.5, fatThreshold: 30, proteinThreshold: 40,
+  proteinOnset: 60, fatOnsetOffset: 30, proteinPeakFrac: 0.40, fatPeakFrac: 0.45,
+  maxWindowH: 8, slotMin: 15, segmentMin: 60, carbSplit: true, splitMinFat: 20,
+  maxTotalCE: 50, maxEntry: 48,
+};
+const SPLIT_FAT = [0, 20, 40, 60], SPLIT_FRAC = [0, 0.25, 0.35, 0.50], SPLIT_DUR = [75, 75, 75, 105];
+function interp(x, xs, ys) {
+  if (x <= xs[0]) return ys[0];
+  if (x >= xs[xs.length - 1]) return ys[ys.length - 1];
+  for (let i = 1; i < xs.length; i++) {
+    if (x <= xs[i]) return ys[i - 1] + (ys[i] - ys[i - 1]) * (x - xs[i - 1]) / (xs[i] - xs[i - 1]);
+  }
+  return ys[ys.length - 1];
+}
+const fpuUnits = (f, p) => (9 * f + 4 * p) / 100;
+function warsawWindowH(fpu) {
+  const n = Math.floor(fpu + 0.5);
+  if (n <= 1) return 3; if (n === 2) return 4; if (n === 3) return 5; return 8;
+}
+function triCdf(t, a, c, b) {
+  if (b <= a) return t >= a ? 1 : 0;
+  c = Math.min(Math.max(c, a), b);
+  if (t <= a) return 0;
+  if (t >= b) return 1;
+  if (t <= c) return c > a ? (t - a) ** 2 / ((b - a) * (c - a)) : 0;
+  return b > c ? 1 - (b - t) ** 2 / ((b - a) * (b - c)) : 1;
+}
+const roundHalfUp = x => Math.floor(x + 0.5);
+function planMeal(C, F, P, s) {
+  const fpu = fpuUnits(F, P);
+  const triggered = F >= s.fatThreshold || P >= s.proteinThreshold;
+  const warnings = [];
+  const W = Math.min(warsawWindowH(fpu), s.maxWindowH) * 60;
+  const tri = (on, frac) => {
+    const onC = Math.max(0, Math.min(on, W - 30));
+    if (onC < on && triggered) warnings.push(`Start profilu skrócony do ${onC} min (okno ${W / 60} h).`);
+    return [onC, onC + frac * (W - onC), W];
+  };
+  const pTri = tri(s.proteinOnset, s.proteinPeakFrac);
+  const fTri = tri(s.proteinOnset + s.fatOnsetOffset, s.fatPeakFrac);
+  const plan = { C, F, P, fpu, triggered, windowMin: W, pTri, fTri, carbsNow: C, carbsSlow: 0,
+    slowDur: 0, ceP: 0, ceF: 0, segments: [], warnings };
+  if (!triggered) return plan;
+  let frac = 0, dur = 0;
+  if (s.carbSplit && F >= s.splitMinFat) { frac = interp(F, SPLIT_FAT, SPLIT_FRAC); dur = interp(F, SPLIT_FAT, SPLIT_DUR); }
+  plan.carbsSlow = C * frac; plan.carbsNow = C - plan.carbsSlow; plan.slowDur = dur;
+  let ceP = 0.4 * P * s.fpuFactor, ceF = 0.9 * F * s.fpuFactor;
+  if (s.maxTotalCE > 0 && ceP + ceF > s.maxTotalCE) {
+    warnings.push(`Ekwiwalent ${Math.round(ceP + ceF)} g ograniczony do ${s.maxTotalCE} g.`);
+    const k = s.maxTotalCE / (ceP + ceF); ceP *= k; ceF *= k;
+  }
+  plan.ceP = ceP; plan.ceF = ceF;
+  const segs = [];
+  if (plan.carbsSlow >= 0.5) {
+    segs.push({ kind: 'slow', offset: 0, duration: Math.ceil(dur / s.slotMin) * s.slotMin, grams: roundHalfUp(plan.carbsSlow) });
+  }
+  const nBlocks = Math.ceil(W / s.segmentMin);
+  let carry = 0;
+  for (let i = 0; i < nBlocks; i++) {
+    const a = i * s.segmentMin, b = Math.min((i + 1) * s.segmentMin, W);
+    const g = ceP * (triCdf(b, ...pTri) - triCdf(a, ...pTri)) + ceF * (triCdf(b, ...fTri) - triCdf(a, ...fTri));
+    const x = g + carry, r = roundHalfUp(x);
+    carry = x - r;
+    if (r > 0) segs.push({ kind: 'fpu', offset: a, duration: b - a, grams: r });
+  }
+  for (const sg of segs) if (sg.grams > s.maxEntry) warnings.push(`Wpis ${sg.grams} g od +${sg.offset} min przekracza limit ${s.maxEntry} g na wpis.`);
+  plan.segments = segs;
+  return plan;
+}
+function expandTicks(segments, slot) {
+  const out = new Map();
+  for (const sg of segments) {
+    const n = Math.max(1, Math.floor(sg.duration / slot));
+    let rem = sg.grams;
+    for (let i = 0; i < n; i++) {
+      const amt = roundHalfUp(rem / (n - i));
+      rem -= amt;
+      const t = sg.offset + i * slot;
+      const cur = out.get(t) || { slow: 0, fpu: 0 };
+      cur[sg.kind] += amt;
+      out.set(t, cur);
+    }
+  }
+  return [...out.entries()].sort((a, b) => a[0] - b[0]).map(([t, v]) => ({ offset: t, slow: v.slow, fpu: v.fpu, grams: v.slow + v.fpu }));
+}
+// ---- end planner ----
+
+const APP = "fpu-planner";
+const MGDL_PER_MMOL = 18.0182;
+const DEFAULTS = { nsUrl: "", token: "", units: "mgdl", minBg: 90, fallRate: -9, blockFalling: true, staleMin: 15 };
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* storage unavailable */ } },
+};
+const S = Object.assign({}, DEFAULTS, store.get("fpu.settings", {}));
+S.planner = Object.assign({}, PLANNER_DEFAULTS, (store.get("fpu.settings", {}) || {}).planner || {});
+let favorites = store.get("fpu.meals", []);
+const M = { name: "", c: 0, f: 0, p: 0, time: null };      // time null = "now"
+let BG = null, LOOP = null, ACTIVE = [], busy = false;
+
+const $ = id => document.getElementById(id);
+const nf1 = new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 1 });
+const fmt = x => nf1.format(x);
+const hhmm = ms => new Date(ms).toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" });
+const parseNum = v => { const x = parseFloat(String(v).replace(",", ".")); return Number.isFinite(x) && x >= 0 ? Math.min(x, 500) : 0; };
+const saveSettings = () => store.set("fpu.settings", S);
+const configured = () => !!(S.nsUrl && S.token);
+const mealTime = () => M.time ?? Date.now();
+const bgText = mg => S.units === "mmol" ? fmt(mg / MGDL_PER_MMOL) : String(Math.round(mg));
+const bgUnit = () => S.units === "mmol" ? "mmol/L" : "mg/dL";
+const esc = s => String(s).replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+
+function toast(text, ms = 3500) {
+  const t = $("toast"); t.textContent = text; t.classList.add("show");
+  clearTimeout(toast._h); toast._h = setTimeout(() => t.classList.remove("show"), ms);
+}
+
+// ---------------- Nightscout API v3 ----------------
+class NSError extends Error { constructor(status, msg) { super(msg); this.status = status; } }
+async function ns(path, { method = "GET", body = null, query = {} } = {}) {
+  const base = S.nsUrl.trim().replace(/\/+$/, "");
+  const q = new URLSearchParams(Object.assign({}, query, { token: S.token.trim() }));
+  const opts = { method, headers: { Accept: "application/json" } };
+  if (body) { opts.headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(body); }
+  let r;
+  try { r = await fetch(`${base}${path}?${q}`, opts); }
+  catch (e) {
+    throw new NSError(0, "Brak odpowiedzi z Nightscouta. Sprawdź adres i czy Nightscout ma włączone cors dla tej strony.");
+  }
+  const text = await r.text();
+  let j = null; try { j = text ? JSON.parse(text) : null; } catch (e) { /* not json */ }
+  if (!r.ok) {
+    const why = r.status === 401 ? "Token jest nieprawidłowy." :
+      r.status === 403 ? "Token nie ma potrzebnych uprawnień (rola w Admin Tools)." :
+      r.status === 404 ? "Nie znaleziono API v3. Potrzebny Nightscout 14 lub nowszy." :
+      `Nightscout odpowiedział błędem ${r.status}.`;
+    throw new NSError(r.status, why);
+  }
+  return j;
+}
+const resultArray = j => Array.isArray(j) ? j : (j && Array.isArray(j.result) ? j.result : []);
+
+async function refreshStatus() {
+  if (!configured()) { renderStatus(); return; }
+  try {
+    const j = await ns("/api/v3/entries", { query: { "sort$desc": "date", limit: 4, fields: "date,sgv,direction" } });
+    const arr = resultArray(j).filter(e => Number(e.sgv) > 0).sort((a, b) => b.date - a.date);
+    if (arr.length) {
+      const e0 = arr[0], e1 = arr[1];
+      let d5 = null;
+      if (e1) { const dt = (e0.date - e1.date) / 60000; if (dt >= 1 && dt <= 15) d5 = (e0.sgv - e1.sgv) * 5 / dt; }
+      BG = { sgv: Number(e0.sgv), date: e0.date, d5, dir: e0.direction };
+    } else BG = null;
+  } catch (e) { BG = { error: e.message }; }
+  try {
+    const j = await ns("/api/v3/devicestatus", { query: { "sort$desc": "date", limit: 1 } });
+    const d = resultArray(j)[0];
+    const sug = d && d.openaps && (d.openaps.suggested || d.openaps.enacted);
+    const iob = d && d.openaps && d.openaps.iob;
+    LOOP = d ? { cob: sug && Number.isFinite(+sug.COB) ? +sug.COB : null,
+                 iob: iob && Number.isFinite(+iob.iob) ? +iob.iob : (sug && Number.isFinite(+sug.IOB) ? +sug.IOB : null),
+                 date: d.date } : null;
+  } catch (e) { LOOP = null; }
+  await loadActive();
+  renderStatus(); render();
+}
+
+function renderStatus() {
+  const el = $("status");
+  if (!configured()) { el.innerHTML = '<span class="quiet">Połącz z Nightscoutem w ustawieniach na dole.</span>'; return; }
+  if (!BG) { el.innerHTML = '<span class="quiet">Brak odczytów glukozy w Nightscoucie.</span>'; return; }
+  if (BG.error) { el.innerHTML = `<span class="quiet">${esc(BG.error)}</span>`; return; }
+  const arrows = { DoubleUp: "⇈", SingleUp: "↑", FortyFiveUp: "↗", Flat: "→", FortyFiveDown: "↘", SingleDown: "↓", DoubleDown: "⇊" };
+  const age = Math.round((Date.now() - BG.date) / 60000);
+  const low = BG.sgv < S.minBg;
+  const d = BG.d5 == null ? "" : (BG.d5 >= 0 ? "+" : "−") + bgText(Math.abs(BG.d5));
+  let h = `<span class="bg${low ? " low" : ""}">${bgText(BG.sgv)} ${arrows[BG.dir] || ""}</span><span>${bgUnit()} ${d}</span>`;
+  if (LOOP && LOOP.cob != null) h += `<span>COB <b>${fmt(LOOP.cob)} g</b></span>`;
+  if (LOOP && LOOP.iob != null) h += `<span>IOB <b>${fmt(LOOP.iob)} j.</b></span>`;
+  h += `<span>${age <= 0 ? "przed chwilą" : age + " min temu"}</span>`;
+  el.innerHTML = h;
+}
+
+// ---------------- active plans ----------------
+async function loadActive() {
+  if (!configured()) { ACTIVE = []; return; }
+  try {
+    const since = Date.now() - 9 * 3600e3;
+    const j = await ns("/api/v3/treatments", { query: { "app$eq": APP, "date$gte": since, limit: 500, sort: "date" } });
+    const docs = resultArray(j).filter(d => d.isValid !== false && d.fpuPlanId);
+    const groups = new Map();
+    for (const d of docs) { if (!groups.has(d.fpuPlanId)) groups.set(d.fpuPlanId, []); groups.get(d.fpuPlanId).push(d); }
+    const now = Date.now();
+    ACTIVE = [...groups.entries()].map(([id, ds]) => {
+      const note = ds.find(d => d.eventType === "Note");
+      const ticks = ds.filter(d => Number(d.carbs) > 0);
+      const fut = ticks.filter(d => d.date > now);
+      return { id, name: (note && note.mealName) || "posiłek", t0: note ? note.date : Math.min(...ds.map(d => d.date)),
+        futureG: fut.reduce((a, d) => a + Number(d.carbs), 0), futureN: fut.length,
+        lastAt: fut.length ? Math.max(...fut.map(d => d.date)) : null };
+    }).sort((a, b) => b.t0 - a.t0);
+    renderActive();
+  } catch (e) {
+    $("active").innerHTML = `<p class="quiet">${esc(e.message)}</p>`;
+  }
+}
+function renderActive() {
+  const el = $("active");
+  if (!ACTIVE.length) { el.innerHTML = '<p class="quiet">Brak wpisów planera z ostatnich 9 godzin.</p>'; return; }
+  let h = "";
+  for (const a of ACTIVE) {
+    const when = `${esc(a.name)}, ${hhmm(a.t0)}`;
+    const left = a.futureN ? `Zostało ${fmt(a.futureG)} g w ${a.futureN} wpisach, do ${hhmm(a.lastAt)}` : "Wszystkie wpisy już minęły";
+    h += `<div class="plan-item"><div><b>${when}</b><br><span class="quiet">${left}</span></div>` +
+      (a.futureN ? `<button class="danger-btn" data-del="${esc(a.id)}">Usuń przyszłe</button>` : "") + `</div>`;
+  }
+  if (ACTIVE.some(a => a.futureN)) h += `<button class="danger-btn wide" data-del="*">Usuń wszystkie przyszłe wpisy planera</button>`;
+  el.innerHTML = h;
+}
+async function deleteDocs(query, label) {
+  if (busy) return; busy = true;
+  try {
+    const j = await ns("/api/v3/treatments", { query: Object.assign({ "app$eq": APP, limit: 500 }, query) });
+    const docs = resultArray(j).filter(d => d.isValid !== false && d.identifier);
+    let n = 0;
+    for (const d of docs) { await ns(`/api/v3/treatments/${encodeURIComponent(d.identifier)}`, { method: "DELETE" }); n++; }
+    toast(`${label}: usunięto ${n} wpisów. AAPS zsynchronizuje zmianę w ciągu kilku minut.`, 5000);
+  } catch (e) { toast(e.message, 6000); }
+  finally { busy = false; await loadActive(); render(); }
+}
+
+// ---------------- plan + checks ----------------
+function currentPlan() {
+  const plan = planMeal(M.c, M.f, M.p, S.planner);
+  plan.ticks = expandTicks(plan.segments, S.planner.slotMin).filter(t => t.grams > 0);
+  plan.sendG = plan.ticks.reduce((a, t) => a + t.grams, 0);
+  plan.slowG = plan.ticks.reduce((a, t) => a + t.slow, 0);
+  plan.fpuG = plan.ticks.reduce((a, t) => a + t.fpu, 0);
+  return plan;
+}
+function checks(plan) {
+  const blocks = [], warns = [];
+  const t0 = mealTime(), now = Date.now();
+  if (!configured()) blocks.push("Uzupełnij adres Nightscouta i token w ustawieniach.");
+  if (!plan.triggered || plan.sendG <= 0) blocks.push("Ten posiłek nie wymaga eCarbs.");
+  if (t0 < now - 60 * 60000) blocks.push("Czas posiłku jest ponad godzinę temu.");
+  if (t0 > now + 30 * 60000) blocks.push("Czas posiłku jest ponad 30 min w przyszłości.");
+  if (configured()) {
+    if (!BG || BG.error || now - BG.date > S.staleMin * 60000) warns.push(`Brak świeżego odczytu glukozy (starszego niż ${S.staleMin} min nie liczę).`);
+    else {
+      if (BG.sgv < S.minBg) blocks.push(`Glukoza ${bgText(BG.sgv)} ${bgUnit()} jest poniżej progu ${bgText(S.minBg)} ${bgUnit()}.`);
+      if (S.blockFalling && BG.d5 != null && BG.d5 <= S.fallRate) blocks.push(`Glukoza spada o ${bgText(Math.abs(BG.d5))} ${bgUnit()} na 5 min.`);
+    }
+    const pending = ACTIVE.reduce((a, x) => a + x.futureG, 0);
+    if (pending > 0) warns.push(`W kolejce są już przyszłe wpisy planera: ${fmt(pending)} g. Nowy plan się do nich doda.`);
+  }
+  return { blocks, warns };
+}
+
+// ---------------- rendering ----------------
+function timelineSVG(plan) {
+  const W = 480, H = 170, base = 134, top = 10, slot = S.planner.slotMin;
+  const maxG = Math.max(4, ...plan.ticks.map(t => t.grams));
+  const k = (base - top) / maxG;
+  const t0 = mealTime();
+  let s = `<svg viewBox="-4 0 ${W + 8} ${H}" role="img" aria-label="Rozkład eCarbs co ${slot} minut przez ${plan.windowMin / 60} godzin">`;
+  for (let m = 0; m < 480; m += slot) {
+    const inWin = m < plan.windowMin;
+    s += `<rect x="${m + 1}" y="${top}" width="${slot - 2}" height="${base - top}" rx="2" fill="var(--cell)" opacity="${inWin ? 1 : 0.35}"/>`;
+  }
+  for (const t of plan.ticks) {
+    const hs = t.slow * k, hf = t.fpu * k;
+    if (hs > 0) s += `<rect class="tick" x="${t.offset + 1}" y="${base - hs}" width="${slot - 2}" height="${hs}" rx="2" fill="var(--honey)"><title>+${t.offset} min: ${t.slow} g wolnych węglowodanów</title></rect>`;
+    if (hf > 0) s += `<rect class="tick" x="${t.offset + 1}" y="${base - hs - hf}" width="${slot - 2}" height="${hf}" rx="2" fill="var(--slate)"><title>+${t.offset} min: ${t.fpu} g z tłuszczu i białka</title></rect>`;
+  }
+  for (let hr = 0; hr <= 8; hr += 2) {
+    const x = hr * 60;
+    s += `<line x1="${x}" x2="${x}" y1="${base}" y2="${base + 6}" stroke="var(--muted)" stroke-width="1"/>`;
+    s += `<text x="${x}" y="${base + 30}" font-size="21" fill="var(--muted)" text-anchor="${hr === 0 ? "start" : hr === 8 ? "end" : "middle"}" font-family="Barlow Condensed, Arial Narrow, sans-serif">${hr === 0 ? hhmm(t0) : "+" + hr + " h"}</text>`;
+  }
+  return s + "</svg>";
+}
+
+function render() {
+  const plan = currentPlan();
+  const el = $("plan");
+  const t0 = mealTime();
+  if (!(M.c || M.f || M.p)) {
+    el.innerHTML = '<p class="quiet">Wpisz skład z etykiety albo wybierz zapisany posiłek.</p>';
+  } else if (!plan.triggered) {
+    el.innerHTML = `<div class="headline"><div><div class="label">W kalkulatorze AAPS</div><div class="big">${fmt(M.c)}<span>g</span></div></div><button class="copy" data-copy="${Math.round(M.c)}">Kopiuj</button></div>
+      <p class="msg warn">Tłuszcz i białko są poniżej progów (${S.planner.fatThreshold} g i ${S.planner.proteinThreshold} g). Wystarczy zwykły wpis węglowodanów.</p>`;
+  } else {
+    const firstFpu = plan.ticks.find(t => t.fpu > 0);
+    let h = `<div class="headline"><div><div class="label">W kalkulatorze AAPS</div><div class="big">${fmt(Math.round(plan.carbsNow))}<span>g</span></div></div><button class="copy" data-copy="${Math.round(plan.carbsNow)}">Kopiuj</button></div>`;
+    h += `<div class="seq">${timelineSVG(plan)}</div>`;
+    h += `<div class="legend"><span><i style="background:var(--honey)"></i>wolne węglowodany ${plan.slowG} g</span><span><i style="background:var(--slate)"></i>tłuszcz i białko ${plan.fpuG} g</span></div>`;
+    h += `<ul class="facts">
+      <li><span>Wpisy do Nightscouta</span><span>${plan.ticks.length} wpisów, ${plan.sendG} g</span></li>
+      ${plan.slowG ? `<li><span>Wolne węglowodany</span><span>${plan.slowG} g, ${hhmm(t0)}–${hhmm(t0 + Math.ceil(plan.slowDur / 15) * 15 * 60000)}</span></li>` : ""}
+      <li><span>Tłuszcz i białko</span><span>${plan.fpuG} g, ${firstFpu ? hhmm(t0 + firstFpu.offset * 60000) : "–"}–${hhmm(t0 + plan.windowMin * 60000)}</span></li>
+      <li><span>Jednostki tłuszczowo-białkowe</span><span>${fmt(plan.fpu)} FPU, okno ${plan.windowMin / 60} h</span></li>
+    </ul>`;
+    for (const w of plan.warnings) h += `<p class="msg warn">${esc(w)}</p>`;
+    const { blocks, warns } = checks(plan);
+    for (const b of blocks) h += `<p class="msg block">${esc(b)}</p>`;
+    for (const w of warns) h += `<p class="msg warn">${esc(w)}</p>`;
+    h += `<details class="json"><summary>Dane, które pójdą do Nightscouta</summary><pre>${esc(JSON.stringify(buildDocs(plan, "fpu-PODGLAD").slice(0, 4), null, 1))}\n… razem ${plan.ticks.length + 1} dokumentów</pre></details>`;
+    el.innerHTML = h;
+  }
+  const { blocks } = checks(plan);
+  const btn = $("send");
+  btn.disabled = busy || blocks.length > 0;
+  btn.textContent = plan.triggered && plan.sendG > 0 ? `Wyślij ${plan.ticks.length} wpisów, ${plan.sendG} g` : "Wyślij do Nightscouta";
+  $("time-label").textContent = timeLabel();
+  renderChips();
+}
+
+function timeLabel() {
+  if (M.time == null) return `teraz (${hhmm(Date.now())})`;
+  const d = Math.round((M.time - Date.now()) / 60000);
+  return `${hhmm(M.time)} (${d === 0 ? "teraz" : d > 0 ? `za ${d} min` : `${-d} min temu`})`;
+}
+
+function renderChips() {
+  let h = favorites.map((m, i) => `<span class="chip"><button data-fav="${i}" aria-label="Wczytaj ${esc(m.name)}: węglowodany ${fmt(m.c)} g, tłuszcz ${fmt(m.f)} g, białko ${fmt(m.p)} g">${esc(m.name)}</button><button class="x" data-unfav="${i}" aria-label="Usuń ${esc(m.name)} z zapisanych">×</button></span>`).join("");
+  h += `<span class="chip save"><button id="savefav">Zapisz posiłek</button></span>`;
+  $("chips").innerHTML = h;
+}
+
+// ---------------- sending ----------------
+function buildDocs(plan, planId) {
+  const t0 = mealTime();
+  const utcOffset = -new Date(t0).getTimezoneOffset();
+  const name = M.name.trim();
+  const base = { app: APP, device: APP, enteredBy: "Planer eCarbs", fpuPlanId: planId, utcOffset };
+  const docs = [Object.assign({}, base, {
+    date: t0, eventType: "Note", fat: M.f, protein: M.p, mealCarbs: M.c, mealName: name || "posiłek",
+    notes: `${name ? name + ": " : ""}C${fmt(M.c)} F${fmt(M.f)} P${fmt(M.p)} | plan ${planId} | factor ${S.planner.fpuFactor}, start ${S.planner.proteinOnset} min`,
+  })];
+  plan.ticks.forEach((t, i) => docs.push(Object.assign({}, base, {
+    date: t0 + t.offset * 60000, eventType: "Carb Correction", carbs: t.grams,
+    fpuKind: t.slow && t.fpu ? "mixed" : t.slow ? "slow" : "fpu",
+    notes: `plan ${planId} (${i + 1}/${plan.ticks.length})`,
+  })));
+  return docs;
+}
+
+async function openConfirm() {
+  if (busy) return;
+  $("send").disabled = true;
+  await refreshStatus();                       // fresh glucose right before the decision
+  const plan = currentPlan();
+  const { blocks, warns } = checks(plan);
+  if (blocks.length) { render(); toast(blocks[0], 5000); return; }
+  const t0 = mealTime();
+  let b = `<ul>
+    <li>${plan.ticks.length} przyszłych wpisów węglowodanów, razem <b>${plan.sendG} g</b>, od ${hhmm(t0)} do ${hhmm(t0 + plan.ticks[plan.ticks.length - 1].offset * 60000)}.</li>
+    <li>Notatka ze składem: węglowodany ${fmt(M.c)} g, tłuszcz ${fmt(M.f)} g, białko ${fmt(M.p)} g.</li>
+    <li>Bolus na <b>${Math.round(plan.carbsNow)} g</b> podaj kalkulatorem w AAPS. Jeśli robisz to po wysyłce, odznacz w kalkulatorze COB, żeby pierwsze wpisy nie liczyły się dwa razy.</li>
+  </ul><p class="quiet">AAPS potraktuje te wpisy jak przyszłe węglowodany i będzie podawać na nie insulinę, gdy kolejne wpisy nadejdą.</p>`;
+  for (const w of warns) b += `<p class="msg warn">${esc(w)}</p>`;
+  $("confirm-body").innerHTML = b;
+  $("confirm").showModal();
+  render();
+}
+
+async function sendPlan() {
+  if (busy) return;
+  busy = true; render();
+  const plan = currentPlan();
+  const planId = "fpu-" + Math.floor(Date.now() / 1000);
+  const docs = buildDocs(plan, planId);
+  const btn = $("send");
+  let ok = 0;
+  try {
+    for (const d of docs) {
+      btn.textContent = `Wysyłanie ${ok + 1} z ${docs.length}…`;
+      await ns("/api/v3/treatments", { method: "POST", body: d });
+      ok++;
+    }
+    const log = store.get("fpu.sent", []);
+    log.unshift({ planId, name: M.name, t0: mealTime(), c: M.c, f: M.f, p: M.p, g: plan.sendG, n: plan.ticks.length });
+    store.set("fpu.sent", log.slice(0, 30));
+    toast(`Wysłano ${ok} dokumentów. Bolus na ${Math.round(plan.carbsNow)} g podaj w AAPS bez uwzględniania COB.`, 8000);
+  } catch (e) {
+    busy = false;
+    toast(`Przerwano po ${ok} z ${docs.length}: ${e.message}`, 8000);
+    if (ok > 0 && confirm(`Wysłano tylko ${ok} z ${docs.length} dokumentów. Usunąć już wysłane wpisy tego planu?`)) {
+      await deleteDocs({ "fpuPlanId$eq": planId }, "Cofnięto plan");
+    }
+  } finally {
+    busy = false;
+    await loadActive(); render();
+  }
+}
+
+// ---------------- settings form ----------------
+function bindSettings() {
+  const top = ["nsUrl", "token", "units", "minBg", "fallRate", "blockFalling"];
+  for (const k of top) {
+    const el = $("s-" + k);
+    if (el.type === "checkbox") el.checked = !!S[k]; else el.value = S[k];
+    el.addEventListener("change", () => {
+      S[k] = el.type === "checkbox" ? el.checked : el.type === "number" ? Number(el.value) : el.value.trim();
+      saveSettings(); renderStatus(); render();
+      if (k === "nsUrl" || k === "token") refreshStatus();
+    });
+  }
+  const pk = ["fpuFactor", "maxTotalCE", "fatThreshold", "proteinThreshold", "proteinOnset", "fatOnsetOffset", "maxWindowH", "maxEntry", "carbSplit"];
+  const fill = () => pk.forEach(k => { const el = $("p-" + k); if (el.type === "checkbox") el.checked = !!S.planner[k]; else el.value = S.planner[k]; });
+  fill();
+  for (const k of pk) {
+    const el = $("p-" + k);
+    el.addEventListener("change", () => {
+      if (el.type === "checkbox") S.planner[k] = el.checked;
+      else { const v = Number(el.value); if (Number.isFinite(v) && v >= 0) S.planner[k] = v; else el.value = S.planner[k]; }
+      if (k === "maxWindowH") S.planner.maxWindowH = Math.min(10, Math.max(3, S.planner.maxWindowH));
+      saveSettings(); render();
+    });
+  }
+  $("reset").addEventListener("click", () => { S.planner = Object.assign({}, PLANNER_DEFAULTS); saveSettings(); fill(); render(); toast("Przywrócono domyślne ustawienia planera."); });
+  $("test").addEventListener("click", async () => {
+    const out = $("test-out");
+    if (!configured()) { out.textContent = "Wpisz adres i token."; return; }
+    out.textContent = "Sprawdzam…";
+    try {
+      const st = await ns("/api/v3/status");
+      const r = (st && st.result) || st || {};
+      const perm = (r.apiPermissions && r.apiPermissions.treatments) || "";
+      const need = ["c", "r", "u", "d"].filter(x => !perm.includes(x));
+      out.textContent = `Nightscout ${r.version || "?"}, API v3 ${r.apiVersion || "?"}. Uprawnienia do wpisów: ${perm || "brak"}` +
+        (need.length ? `. Brakuje: ${need.join(", ")} (create/read/update/delete).` : ". Wszystko gotowe.");
+      refreshStatus();
+    } catch (e) { out.textContent = e.message; }
+  });
+}
+
+// ---------------- events ----------------
+function setMacro(k, v) { M[k] = Math.round(parseNum(v) * 10) / 10; $(k).value = fmt(M[k]); render(); }
+document.addEventListener("click", e => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  if (b.dataset.step) { const [k, d] = b.dataset.step.split(":"); setMacro(k, Math.max(0, M[k] + Number(d))); }
+  else if (b.dataset.time) {
+    if (b.dataset.time === "now") M.time = null;
+    else M.time = Math.round((mealTime() + Number(b.dataset.time) * 60000) / 60000) * 60000;
+    render();
+  }
+  else if (b.dataset.copy !== undefined) {
+    navigator.clipboard && navigator.clipboard.writeText(b.dataset.copy).then(() => toast("Skopiowano.")).catch(() => toast(b.dataset.copy + " g"));
+  }
+  else if (b.dataset.fav !== undefined) {
+    const m = favorites[+b.dataset.fav]; M.name = m.name; $("name").value = m.name;
+    ["c", "f", "p"].forEach(k => setMacro(k, m[k]));
+  }
+  else if (b.dataset.unfav !== undefined) {
+    const m = favorites[+b.dataset.unfav];
+    if (confirm(`Usunąć „${m.name}” z zapisanych?`)) { favorites.splice(+b.dataset.unfav, 1); store.set("fpu.meals", favorites); render(); }
+  }
+  else if (b.id === "savefav") {
+    const name = M.name.trim();
+    if (!name) { toast("Najpierw wpisz nazwę posiłku."); $("name").focus(); return; }
+    favorites = favorites.filter(m => m.name !== name);
+    favorites.unshift({ name, c: M.c, f: M.f, p: M.p }); store.set("fpu.meals", favorites.slice(0, 30));
+    const url = new URL(location.href); url.search = new URLSearchParams({ name, c: M.c, f: M.f, p: M.p });
+    navigator.clipboard && navigator.clipboard.writeText(url.toString()).catch(() => {});
+    toast("Zapisano. Link do skrótu jest w schowku."); render();
+  }
+  else if (b.dataset.del) {
+    const all = b.dataset.del === "*";
+    if (confirm(all ? "Usunąć wszystkie przyszłe wpisy planera?" : "Usunąć przyszłe wpisy tego planu?")) {
+      deleteDocs(Object.assign({ "date$gt": Date.now() }, all ? {} : { "fpuPlanId$eq": b.dataset.del }), all ? "Wszystkie plany" : "Plan");
+    }
+  }
+});
+document.addEventListener("contextmenu", e => {
+  const b = e.target.closest("button[data-fav]");
+  if (!b) return;
+  e.preventDefault();
+  const m = favorites[+b.dataset.fav];
+  const url = new URL(location.href); url.search = new URLSearchParams({ name: m.name, c: m.c, f: m.f, p: m.p });
+  navigator.clipboard && navigator.clipboard.writeText(url.toString()).then(() => toast("Skopiowano link do skrótu.")).catch(() => toast(url.toString(), 8000));
+});
+["c", "f", "p"].forEach(k => {
+  const el = $(k);
+  el.addEventListener("focus", () => el.select());
+  el.addEventListener("input", () => { M[k] = parseNum(el.value); render(); });
+  el.addEventListener("change", () => setMacro(k, el.value));
+});
+$("name").addEventListener("input", e => { M.name = e.target.value; });
+$("send").addEventListener("click", openConfirm);
+$("confirm-no").addEventListener("click", () => $("confirm").close());
+$("confirm-yes").addEventListener("click", () => { $("confirm").close(); sendPlan(); });
+$("refresh").addEventListener("click", () => { refreshStatus(); toast("Odświeżam…", 1200); });
+document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshStatus(); });
+
+// ---------------- start ----------------
+(function init() {
+  const q = new URLSearchParams(location.search);
+  if (q.get("name")) { M.name = q.get("name"); $("name").value = M.name; }
+  for (const k of ["c", "f", "p"]) if (q.get(k)) { M[k] = parseNum(q.get(k)); $(k).value = fmt(M[k]); }
+  bindSettings();
+  if (!configured()) $("settings").open = true;
+  render();
+  refreshStatus();
+  setInterval(() => { if (!document.hidden) refreshStatus(); }, 60000);
+  setInterval(() => { if (!document.hidden && !busy) render(); }, 30000);
+})();
+</script>
+</body>
+</html>
