@@ -361,6 +361,7 @@ const store = {
 };
 const S = Object.assign({}, DEFAULTS, store.get("fpu.settings", {}));
 S.planner = Object.assign({}, PLANNER_DEFAULTS, (store.get("fpu.settings", {}) || {}).planner || {});
+S.nsUrl = normUrl(S.nsUrl); S.token = normToken(S.token);
 let favorites = store.get("fpu.meals", []);
 const M = { name: "", c: 0, f: 0, p: 0, time: null };      // time null = "now"
 let BG = null, LOOP = null, ACTIVE = [], busy = false;
@@ -383,23 +384,49 @@ function toast(text, ms = 3500) {
 }
 
 // ---------------- Nightscout API v3 ----------------
+function normUrl(v) {
+  v = String(v || "").trim();
+  if (!v) return "";
+  if (!/^https?:\/\//i.test(v)) v = "https://" + v;
+  try { const u = new URL(v); return `${u.protocol}//${u.host}`.toLowerCase(); } catch (e) { return v.replace(/\/+$/, ""); }
+}
+function normToken(v) {
+  v = String(v || "").trim();
+  const m = v.match(/[?&]token=([^&#\s]+)/);
+  return m ? decodeURIComponent(m[1]) : v.replace(/\s+/g, "");
+}
 class NSError extends Error { constructor(status, msg) { super(msg); this.status = status; } }
-async function ns(path, { method = "GET", body = null, query = {} } = {}) {
-  const base = S.nsUrl.trim().replace(/\/+$/, "");
-  const q = new URLSearchParams(Object.assign({}, query, { token: S.token.trim() }));
-  const opts = { method, headers: { Accept: "application/json" } };
+// Nightscout 15 accepts only a JWT on API v3; it is exchanged for the access token via API v2.
+let JWT = null;
+const NO_REPLY = "Brak odpowiedzi z Nightscouta. Sprawdź adres (razem z portem, jeśli go masz) i czy Nightscout ma włączone cors dla tej strony.";
+const BAD_TOKEN = "Nightscout nie rozpoznał tokenu (401). Wklej sam token z kolumny z tokenem w /admin, np. planer-1a2b3c4d5e6f7a8b, bez nazwy podmiotu i bez całego linku.";
+const baseUrl = () => S.nsUrl.trim().replace(/\/+$/, "");
+async function getJwt(force = false) {
+  if (!force && JWT && JWT.key === baseUrl() + "|" + S.token && JWT.exp - 120000 > Date.now()) return JWT.token;
+  let r;
+  try { r = await fetch(`${baseUrl()}/api/v2/authorization/request/${encodeURIComponent(S.token.trim())}`, { headers: { Accept: "application/json" } }); }
+  catch (e) { throw new NSError(0, NO_REPLY); }
+  let j = null; try { j = await r.json(); } catch (e) { /* not json */ }
+  if (!r.ok || !j || !j.token) throw new NSError(r.status === 404 ? 404 : 401, r.status === 404 ? "Ten Nightscout nie ma API v2/v3. Potrzebna wersja 15 lub nowsza." : BAD_TOKEN);
+  JWT = { token: j.token, exp: j.exp ? j.exp * 1000 : Date.now() + 3600e3, key: baseUrl() + "|" + S.token };
+  return JWT.token;
+}
+async function ns(path, { method = "GET", body = null, query = {} } = {}, retried = false) {
+  const jwt = await getJwt();
+  const q = new URLSearchParams(query).toString();
+  const opts = { method, headers: { Accept: "application/json", Authorization: `Bearer ${jwt}` } };
   if (body) { opts.headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(body); }
   let r;
-  try { r = await fetch(`${base}${path}?${q}`, opts); }
-  catch (e) {
-    throw new NSError(0, "Brak odpowiedzi z Nightscouta. Sprawdź adres i czy Nightscout ma włączone cors dla tej strony.");
-  }
+  try { r = await fetch(`${baseUrl()}${path}${q ? "?" + q : ""}`, opts); }
+  catch (e) { throw new NSError(0, NO_REPLY); }
+  if (r.status === 401 && !retried) { JWT = null; return ns(path, { method, body, query }, true); }   // JWT expired
   const text = await r.text();
   let j = null; try { j = text ? JSON.parse(text) : null; } catch (e) { /* not json */ }
   if (!r.ok) {
-    const why = r.status === 401 ? "Token jest nieprawidłowy." :
-      r.status === 403 ? "Token nie ma potrzebnych uprawnień (rola w Admin Tools)." :
-      r.status === 404 ? "Nie znaleziono API v3. Potrzebny Nightscout 14 lub nowszy." :
+    const missing = j && typeof j.message === "string" && (j.message.match(/Missing permission (\S+)/) || [])[1];
+    const why = r.status === 401 ? BAD_TOKEN :
+      r.status === 403 ? `Token działa, ale jego rola nie ma uprawnienia ${missing || "do tej operacji"} (403). Zmień rolę w Admin Tools.` :
+      r.status === 404 ? "Nie znaleziono API v3. Potrzebny Nightscout 15 lub nowszy." :
       `Nightscout odpowiedział błędem ${r.status}.`;
     throw new NSError(r.status, why);
   }
@@ -670,6 +697,9 @@ function bindSettings() {
     if (el.type === "checkbox") el.checked = !!S[k]; else el.value = S[k];
     el.addEventListener("change", () => {
       S[k] = el.type === "checkbox" ? el.checked : el.type === "number" ? Number(el.value) : el.value.trim();
+      if (k === "nsUrl" || k === "token") JWT = null;
+      if (k === "nsUrl") { S.nsUrl = normUrl(S.nsUrl); el.value = S.nsUrl; }
+      if (k === "token") { S.token = normToken(S.token); el.value = S.token; }
       saveSettings(); renderStatus(); render();
       if (k === "nsUrl" || k === "token") refreshStatus();
     });
