@@ -721,13 +721,18 @@ function bindSettings() {
     const out = $("test-out");
     if (!configured()) { out.textContent = "Wpisz adres i token."; return; }
     out.textContent = "Sprawdzam…";
+    JWT = null;                                   // pick up role changes immediately
     try {
       const st = await ns("/api/v3/status");
       const r = (st && st.result) || st || {};
-      const perm = (r.apiPermissions && r.apiPermissions.treatments) || "";
-      const need = ["c", "r", "u", "d"].filter(x => !perm.includes(x));
-      out.textContent = `Nightscout ${r.version || "?"}, API v3 ${r.apiVersion || "?"}. Uprawnienia do wpisów: ${perm || "brak"}` +
-        (need.length ? `. Brakuje: ${need.join(", ")} (create/read/update/delete).` : ". Wszystko gotowe.");
+      const ap = r.apiPermissions || {};
+      const NEED = [["treatments", "r", "api:treatments:read"], ["treatments", "c", "api:treatments:create"],
+                    ["treatments", "u", "api:treatments:update"], ["treatments", "d", "api:treatments:delete"],
+                    ["entries", "r", "api:entries:read"], ["devicestatus", "r", "api:devicestatus:read"]];
+      const missing = NEED.filter(([col, x]) => !(ap[col] || "").includes(x)).map(n => n[2]);
+      out.textContent = `Nightscout ${r.version || "?"}, API v3 ${r.apiVersion || "?"}. ` +
+        `Wpisy: ${ap.treatments || "brak"}, glukoza: ${ap.entries || "brak"}, status pętli: ${ap.devicestatus || "brak"}. ` +
+        (missing.length ? `Dopisz do roli: ${missing.join(", ")}.` : "Wszystko gotowe.");
       refreshStatus();
     } catch (e) { out.textContent = e.message; }
   });
