@@ -108,6 +108,7 @@ button, input, select { font: inherit; color: inherit; }
 .msg { border-radius: 10px; padding: 0.55rem 0.75rem; margin-top: 0.6rem; font-size: 0.95rem; }
 .msg.warn { background: var(--warn-bg); }
 .msg.block { background: var(--danger-bg); color: var(--danger); font-weight: 500; }
+.msg.ok { border: 1px solid var(--ok); color: var(--ok); }
 .quiet { color: var(--muted); font-size: 0.95rem; }
 details.json summary { cursor: pointer; color: var(--muted); margin-top: 0.75rem; font-size: 0.9rem; }
 details.json pre { overflow-x: auto; font-size: 0.75rem; background: var(--bg); padding: 0.6rem; border-radius: 8px; max-height: 14rem; }
@@ -371,6 +372,10 @@ let BG = null, LOOP = null, ACTIVE = [], busy = false;
 const $ = id => document.getElementById(id);
 const nf1 = new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 1 });
 const fmt = x => nf1.format(x);
+// Polish plural: 1 wpis, 2-4 wpisy (not 12-14), 5+ wpisów.
+const plural = (n, one, few, many) => n === 1 ? one : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14)) ? few : many;
+const nWpis = n => `${n} ${plural(n, "wpis", "wpisy", "wpisów")}`;
+const nDok = n => `${n} ${plural(n, "dokument", "dokumenty", "dokumentów")}`;
 const hhmm = ms => new Date(ms).toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" });
 const parseNum = v => { const x = parseFloat(String(v).replace(",", ".")); return Number.isFinite(x) && x >= 0 ? Math.min(x, 500) : 0; };
 const saveSettings = () => store.set("fpu.settings", S);
@@ -508,6 +513,7 @@ async function loadActive() {
       const ticks = ds.filter(d => Number(d.carbs) > 0);
       const fut = ticks.filter(d => d.date > now);
       return { id, name: (note && note.mealName) || "posiłek", t0: note ? note.date : Math.min(...ds.map(d => d.date)),
+        c: note ? Number(note.mealCarbs) : null, f: note ? Number(note.fat) : null, p: note ? Number(note.protein) : null,
         futureG: fut.reduce((a, d) => a + Number(d.carbs), 0), futureN: fut.length,
         lastAt: fut.length ? Math.max(...fut.map(d => d.date)) : null };
     }).sort((a, b) => b.t0 - a.t0);
@@ -530,14 +536,15 @@ function renderActive() {
   el.innerHTML = h;
 }
 async function deleteDocs(query, label) {
-  if (busy) return; busy = true;
+  if (busy) return null; busy = true;
   try {
     const j = await ns("/api/v3/treatments", { query: Object.assign({ "app$eq": APP, limit: 500 }, query) });
     const docs = resultArray(j).filter(d => d.isValid !== false && d.identifier);
     let n = 0;
     for (const d of docs) { await ns(`/api/v3/treatments/${encodeURIComponent(d.identifier)}`, { method: "DELETE" }); n++; }
-    toast(`${label}: usunięto ${n} wpisów. AAPS zsynchronizuje zmianę w ciągu kilku minut.`, 5000);
-  } catch (e) { toast(e.message, 6000); }
+    toast(`${label}: usunięto ${nWpis(n)}. AAPS zsynchronizuje zmianę w ciągu kilku minut.`, 5000);
+    return n;
+  } catch (e) { toast(e.message, 6000); return null; }
   finally { busy = false; await loadActive(); render(); }
 }
 
@@ -563,6 +570,9 @@ function checks(plan) {
       if (BG.sgv < S.minBg) blocks.push(`Glukoza ${bgText(BG.sgv)} ${bgUnit()} jest poniżej progu ${bgText(S.minBg)} ${bgUnit()}.`);
       if (S.blockFalling && BG.d5 != null && BG.d5 <= S.fallRate) blocks.push(`Glukoza spada o ${bgText(Math.abs(BG.d5))} ${bgUnit()} na 5 min.`);
     }
+    // The same composition sent recently is most likely the same meal tapped twice (or sent from another device).
+    const same = (M.c || M.f || M.p) && ACTIVE.find(a => a.c === M.c && a.f === M.f && a.p === M.p && Math.abs(a.t0 - t0) < 3 * 3600e3);
+    if (same) warns.unshift(`Ten sam skład (węglowodany ${fmt(M.c)} g, tłuszcz ${fmt(M.f)} g, białko ${fmt(M.p)} g) wysłano już o ${hhmm(same.t0)}. Wyślij ponownie tylko, jeśli to naprawdę drugi posiłek.`);
     const pending = ACTIVE.reduce((a, x) => a + x.futureG, 0);
     if (pending > 0) warns.push(`W kolejce są już przyszłe wpisy planera: ${fmt(pending)} g. Nowy plan się do nich doda.`);
   }
@@ -598,7 +608,7 @@ function render() {
   const el = $("plan");
   const t0 = mealTime();
   if (!(M.c || M.f || M.p)) {
-    el.innerHTML = '<p class="quiet">Wpisz skład z etykiety albo wybierz zapisany posiłek.</p>';
+    el.innerHTML = lastSentCard() + '<p class="quiet">Wpisz skład z etykiety albo wybierz zapisany posiłek.</p>';
   } else if (!plan.triggered) {
     el.innerHTML = `<div class="headline"><div><div class="label">W kalkulatorze AAPS</div><div class="big">${fmt(M.c)}<span>g</span></div></div><button class="copy" data-copy="${Math.round(M.c)}">Kopiuj</button></div>
       <p class="msg warn">Tłuszcz i białko są poniżej progów (${S.planner.fatThreshold} g i ${S.planner.proteinThreshold} g). Wystarczy zwykły wpis węglowodanów.</p>`;
@@ -608,7 +618,7 @@ function render() {
     h += `<div class="seq">${timelineSVG(plan)}</div>`;
     h += `<div class="legend"><span><i style="background:var(--honey)"></i>wolne węglowodany ${plan.slowG} g</span><span><i style="background:var(--slate)"></i>tłuszcz i białko ${plan.fpuG} g</span></div>`;
     h += `<ul class="facts">
-      <li><span>Wpisy do Nightscouta</span><span>${plan.ticks.length} wpisów, ${plan.sendG} g</span></li>
+      <li><span>Wpisy do Nightscouta</span><span>${nWpis(plan.ticks.length)}, ${plan.sendG} g</span></li>
       ${plan.slowG ? `<li><span>Wolne węglowodany</span><span>${plan.slowG} g, ${hhmm(t0)}–${hhmm(t0 + Math.ceil(plan.slowDur / 15) * 15 * 60000)}</span></li>` : ""}
       <li><span>Tłuszcz i białko</span><span>${plan.fpuG} g, ${firstFpu ? hhmm(t0 + firstFpu.offset * 60000) : "–"}–${hhmm(t0 + plan.windowMin * 60000)}</span></li>
       <li><span>Jednostki tłuszczowo-białkowe</span><span>${fmt(plan.fpu)} FPU, okno ${plan.windowMin / 60} h</span></li>
@@ -623,9 +633,31 @@ function render() {
   const { blocks } = checks(plan);
   const btn = $("send");
   btn.disabled = busy || blocks.length > 0;
-  btn.textContent = plan.triggered && plan.sendG > 0 ? `Wyślij ${plan.ticks.length} wpisów, ${plan.sendG} g` : "Wyślij do Nightscouta";
+  btn.textContent = plan.triggered && plan.sendG > 0 ? `Wyślij ${nWpis(plan.ticks.length)}, ${plan.sendG} g` : "Wyślij do Nightscouta";
   $("time-label").textContent = timeLabel();
   renderChips();
+}
+
+// After a send the form is empty, so the bolus amount for AAPS stays visible here for an hour.
+function lastSentCard() {
+  const last = store.get("fpu.sent", [])[0];
+  if (!last || !last.at || last.bolusG == null || Date.now() - last.at > 60 * 60000) return "";
+  return `<div class="headline"><div><div class="label">Wysłano o ${hhmm(last.at)}${last.name ? ": " + esc(last.name) : ""}. W kalkulatorze AAPS</div><div class="big">${last.bolusG}<span>g</span></div></div><button class="copy" data-copy="${last.bolusG}">Kopiuj</button></div>
+    <p class="msg ok">Plan jest w Nightscoucie: ${nWpis(last.n)}, ${last.g} g. Formularz wyczyszczono, żeby nie wysłać tego samego posiłku drugi raz. Jeśli bolus podajesz dopiero teraz, odznacz COB w kalkulatorze.</p>`;
+}
+
+// Clears the meal so the same plan cannot be sent twice by a second tap.
+function resetMeal() {
+  M.name = ""; M.c = 0; M.f = 0; M.p = 0; M.time = null;
+  $("name").value = "";
+  for (const k of ["c", "f", "p"]) $(k).value = fmt(0);
+  clearUrlMeal();
+}
+
+// A shortcut link carries the meal in the address. Remove it once read, so a reload of the page
+// (Android may reload the app when you come back from AAPS) does not fill the form again.
+function clearUrlMeal() {
+  if (location.search) history.replaceState(null, "", location.pathname + location.hash);
 }
 
 function timeLabel() {
@@ -692,14 +724,24 @@ async function sendPlan() {
       ok++;
     }
     const log = store.get("fpu.sent", []);
-    log.unshift({ planId, name: M.name, t0: mealTime(), c: M.c, f: M.f, p: M.p, g: plan.sendG, n: plan.ticks.length });
+    log.unshift({ planId, name: M.name.trim(), t0: mealTime(), c: M.c, f: M.f, p: M.p, g: plan.sendG, n: plan.ticks.length,
+                  at: Date.now(), bolusG: Math.round(plan.carbsNow) });
     store.set("fpu.sent", log.slice(0, 30));
-    toast(`Wysłano ${ok} dokumentów. Bolus na ${Math.round(plan.carbsNow)} g podaj w AAPS bez uwzględniania COB.`, 8000);
+    resetMeal();
+    toast(`Wysłano ${nDok(ok)}. Bolus na ${Math.round(plan.carbsNow)} g podaj w AAPS.`, 8000);
   } catch (e) {
     busy = false;
     toast(`Przerwano po ${ok} z ${docs.length}: ${e.message}`, 8000);
+    // Nothing with carbs reached Nightscout (the first document is the note): keep the form for a retry.
+    // Something did: keep the form only when those entries were removed again, otherwise a retry would
+    // add the same carbs a second time.
+    let keepForm = ok === 0;
     if (ok > 0 && confirm(`Wysłano tylko ${ok} z ${docs.length} dokumentów. Usunąć już wysłane wpisy tego planu?`)) {
-      await deleteDocs({ "fpuPlanId$eq": planId }, "Cofnięto plan");
+      keepForm = (await deleteDocs({ "fpuPlanId$eq": planId }, "Cofnięto plan")) != null;
+    }
+    if (!keepForm) {
+      resetMeal();
+      toast(`Część planu (${ok} z ${docs.length}) została w Nightscoucie, widać ją w „Aktywnych planach”. Formularz wyczyszczono, żeby nie wysłać jej drugi raz.`, 10000);
     }
   } finally {
     busy = false;
@@ -856,6 +898,7 @@ $("install").addEventListener("click", async () => {
   const q = new URLSearchParams(location.search);
   if (q.get("name")) { M.name = q.get("name"); $("name").value = M.name; }
   for (const k of ["c", "f", "p"]) if (q.get(k)) { M[k] = parseNum(q.get(k)); $(k).value = fmt(M[k]); }
+  clearUrlMeal();
   bindSettings();
   if (!configured()) $("settings").open = true;
   render();
