@@ -1,5 +1,5 @@
 // Planer eCarbs: offline copy of the app itself. Nightscout and fonts are never cached or touched.
-const CACHE = "planer-ecarbs-v2";
+const CACHE = "planer-ecarbs-v4";
 const SHELL = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", event => {
